@@ -42,6 +42,14 @@ jobs:
       - name: Build with Maven
         run: mvn verify -e -B -V
 
+      - name: Upload results
+        uses: actions/upload-artifact@v3
+        with:
+          name: results
+          path: |
+            ${{ github.workspace }}/*/target/surefire-reports/*.xml
+            ${{ github.workspace }}/*/target/failsafe-reports/*.xml
+
       - uses: dorny/test-reporter@v1
         if: success() || failure()
         with:
