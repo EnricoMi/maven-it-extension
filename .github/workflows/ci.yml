@@ -1,0 +1,94 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+name: PUSH_PULL_REQUEST
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-java@v3
+        with:
+          java-version: 19
+          distribution: 'temurin'
+
+      - name: Cache local Maven repositories
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.m2/repository
+            ./**/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Build with Maven
+        run: mvn verify -e -B -V
+
+      - name: Upload results
+        uses: actions/upload-artifact@v3
+        with:
+          name: results
+          path: |
+            ${{ github.workspace }}/*/target/surefire-reports/*.xml
+            ${{ github.workspace }}/*/target/failsafe-reports/*.xml
+
+      - uses: dorny/test-reporter@v1
+        if: success() || failure()
+        with:
+          name: 'Publish Test Results'
+          path: |
+            ${{ github.workspace }}/itf-assertj/target/surefire-reports/*.xml
+            ${{ github.workspace }}/itf-extension-maven/target/surefire-reports/*.xml
+            ${{ github.workspace }}/itf-jupiter-extension/target/surefire-reports/*.xml
+          reporter: 'java-junit'
+
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action/composite@v2
+        if: always()
+        with:
+          root_log_level: DEBUG
+          log_level: DEBUG
+          comment_title: Test Results
+          junit_files: |
+            ${{ github.workspace }}/itf-assertj/target/surefire-reports/*.xml
+            ${{ github.workspace }}/itf-extension-maven/target/surefire-reports/*.xml
+            ${{ github.workspace }}/itf-jupiter-extension/target/surefire-reports/*.xml
+
+      - name: Publish Integration Test Results
+        uses: EnricoMi/publish-unit-test-result-action/composite@v2
+        if: always()
+        with:
+          root_log_level: DEBUG
+          log_level: DEBUG
+          comment_title: Integration Test Results
+          junit_files: |
+            ${{ github.workspace }}/itf-examples/target/failsafe-reports/*.xml
+            ${{ github.workspace }}/itf-failure-plugin/target/failsafe-reports/*.xml
+            ${{ github.workspace }}/itf-maven-plugin/target/failsafe-reports/*.xml
+#
+#      - name: Add coverage to PR
+#        id: jacoco
+#        uses: madrapps/jacoco-report@v1.3
+#        with:
+#          paths: |
+#            "./itf-extension-maven/target/site/jacoco/jacoco.xml"
+#          token: ${{ secrets.GITHUB_TOKEN }}
+#          debug-mode: true
